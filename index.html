@@ -1558,5 +1558,161 @@ Vamos orar...`;
       loadSavedData();
     })();
   </script>
+<!-- === BLOCO DE GRAVAÇÃO DE VÍDEO E ÁUDIO === -->
+<style>
+  #rec-float-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 50px;
+    background: #dc2626;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    transition: transform 0.15s, background 0.2s;
+  }
+  #rec-float-btn:hover { transform: scale(1.04); }
+  #rec-float-btn.gravando { background: #111827; border: 2px solid #ef4444; }
+  #rec-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+  }
+  #rec-float-btn.gravando #rec-dot {
+    background: #ef4444;
+    animation: recPulse 1s infinite;
+  }
+  @keyframes recPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+</style>
+
+<button id="rec-float-btn" type="button">
+  <span id="rec-dot"></span>
+  <span id="rec-label">Gravar Vídeo</span>
+</button>
+
+<script>
+(() => {
+  const btn = document.getElementById('rec-float-btn');
+  const label = document.getElementById('rec-label');
+  let recorder = null;
+  let chunks = [];
+  let tracksCriadas = [];
+  let timerId = null;
+  let segundos = 0;
+
+  function formatarTempo(s) {
+    const m = String(Math.floor(s / 60)).padStart(2, '0');
+    const r = String(s % 60).padStart(2, '0');
+    return `${m}:${r}`;
+  }
+
+  function escolherFormato() {
+    const tipos = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4'
+    ];
+    return tipos.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  async function iniciarGravacao() {
+    try {
+      tracksCriadas = [];
+      const videoEl = document.querySelector('video');
+      let videoTrack = null;
+
+      // Reaproveita a câmera se já estiver ligada no app
+      if (videoEl && videoEl.srcObject && videoEl.srcObject.getVideoTracks().length > 0) {
+        videoTrack = videoEl.srcObject.getVideoTracks()[0];
+      }
+
+      let streamFinal;
+      if (videoTrack && videoTrack.readyState === 'live') {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tracksCriadas.push(...audioStream.getTracks());
+        streamFinal = new MediaStream([videoTrack, ...audioStream.getAudioTracks()]);
+      } else {
+        const camStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: true
+        });
+        tracksCriadas.push(...camStream.getTracks());
+        streamFinal = camStream;
+      }
+
+      const mimeType = escolherFormato();
+      recorder = mimeType ? new MediaRecorder(streamFinal, { mimeType }) : new MediaRecorder(streamFinal);
+      chunks = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const tipo = recorder.mimeType || 'video/webm';
+        const ext = tipo.includes('mp4') ? 'mp4' : 'webm';
+        const blob = new Blob(chunks, { type: tipo });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const agora = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+        a.href = url;
+        a.download = `teleprompter-${agora}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+        // Encerra apenas as faixas abertas por este botão
+        tracksCriadas.forEach(t => t.stop());
+        tracksCriadas = [];
+      };
+
+      recorder.start();
+      segundos = 0;
+      btn.classList.add('gravando');
+      label.textContent = 'Parar (00:00)';
+      timerId = setInterval(() => {
+        segundos++;
+        label.textContent = `Parar (${formatarTempo(segundos)})`;
+      }, 1000);
+    } catch (err) {
+      alert('Não foi possível iniciar a gravação. Verifique se a câmera e o microfone estão permitidos no navegador.');
+      console.error(err);
+    }
+  }
+
+  function pararGravacao() {
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+    clearInterval(timerId);
+    btn.classList.remove('gravando');
+    label.textContent = 'Gravar Vídeo';
+  }
+
+  btn.addEventListener('click', () => {
+    if (recorder && recorder.state === 'recording') {
+      pararGravacao();
+    } else {
+      iniciarGravacao();
+    }
+  });
+})();
+</script>
+<!-- === FIM DO BLOCO DE GRAVAÇÃO === -->
 </body>
 </html>
