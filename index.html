@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Teleprompter Studio — Edição Pregação</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonte Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Estilização base e prevenção de rolagem horizontal */
+    html, body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #09090b;
+      color: #f4f4f5;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Ocultar barras de rolagem em áreas imersivas */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Modo espelhado horizontal para vidro de teleprompter */
+    .mirrored-text {
+      transform: scaleX(-1);
+    }
+
+    /* Espelhamento natural para câmera frontal */
+    .camera-mirror {
+      transform: scaleX(-1);
+    }
+
+    /* Sliders customizados com área de toque confortável no celular */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+      width: 100%;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: #27272a;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 9999px;
+      background: #10b981;
+      border: 2px solid #09090b;
+      margin-top: -7px;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.18);
+    }
+    input[type="range"]::-moz-range-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: #27272a;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 9999px;
+      background: #10b981;
+      border: 2px solid #09090b;
+    }
+
+    /* Estilos semânticos do texto renderizado no Teleprompter */
+    .tp-topic {
+      color: #34d399; /* Verde Esmeralda */
+      font-weight: 800;
+      font-size: 1.08em;
+      line-height: 1.25;
+      margin-top: 1.1em;
+      margin-bottom: 0.45em;
+      padding-bottom: 0.25em;
+      border-bottom: 2px solid rgba(52, 211, 153, 0.28);
+      letter-spacing: -0.01em;
+    }
+    .tp-topic:first-child {
+      margin-top: 0;
+    }
+
+    .tp-verse {
+      color: #fde047; /* Amarelo Ouro */
+      border-left: 5px solid #facc15;
+      background: rgba(250, 204, 21, 0.1);
+      padding: 0.45em 0.7em;
+      margin: 0.55em 0;
+      border-radius: 0 0.45em 0.45em 0;
+      font-style: italic;
+      line-height: 1.38;
+    }
+
+    .tp-cue-line {
+      margin: 0.5em 0;
+    }
+
+    .tp-cue-badge {
+      display: inline-block;
+      color: #38bdf8; /* Azul Ciano */
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 0.45em;
+      padding: 0.18em 0.55em;
+      font-size: 0.56em;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      vertical-align: middle;
+      line-height: 1.35;
+    }
+
+    .tp-paragraph {
+      margin: 0.42em 0;
+      color: #e4e4e7;
+      line-height: 1.42;
+    }
+
+    .tp-list-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4em;
+      margin: 0.38em 0;
+      padding-left: 0.2em;
+      color: #e4e4e7;
+      line-height: 1.4;
+    }
+
+    .tp-list-bullet {
+      color: #34d399;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .tp-bold {
+      color: #ffffff;
+      font-weight: 800;
+    }
+
+    /* Pulso de alerta para o cronômetro no último minuto / estourado */
+    @keyframes timerPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.03); }
+    }
+    .timer-alert-pulse {
+      animation: timerPulse 1s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- ==================== NOTIFICAÇÕES TOAST (Sem alert/confirm) ==================== -->
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none flex flex-col gap-2"></div>
+
+  <!-- ==================== MODO 1: EDITOR DE ESBOÇO ==================== -->
+  <div id="editor-view" class="flex-1 flex flex-col w-full max-w-5xl mx-auto px-4 py-5 sm:px-6 sm:py-7">
+
+    <!-- Cabeçalho -->
+    <header class="flex flex-wrap items-center justify-between gap-4 mb-5">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <svg class="w-6 h-6 text-zinc-950" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white">Teleprompter Studio</h1>
+            <span class="px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              Edição Pregação
+            </span>
+          </div>
+          <p class="text-xs sm:text-sm text-zinc-400">Esboço inteligente com cronômetro, destaques bíblicos e atalhos por tópico</p>
+        </div>
+      </div>
+
+      <!-- Indicador de salvamento automático -->
+      <div class="flex items-center gap-2 text-xs text-zinc-400 bg-zinc-900/90 border border-zinc-800 px-3 py-1.5 rounded-full">
+        <span id="save-dot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span id="save-status">Salvo automaticamente</span>
+      </div>
+    </header>
+
+    <!-- Barra de Legenda de Formatação -->
+    <div class="mb-4 bg-zinc-900/70 border border-zinc-800/90 rounded-2xl px-4 py-3 flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+      <span class="text-zinc-400 font-medium mr-1">Formatação rápida:</span>
+      <span class="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold">
+        ### Tópico
+      </span>
+      <span class="px-2.5 py-1 rounded-lg bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 font-semibold">
+        &gt; Versículo
+      </span>
+      <span class="px-2.5 py-1 rounded-lg bg-sky-400/10 border border-sky-400/30 text-sky-400 font-semibold">
+        [Aviso interno]
+      </span>
+      <span class="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-white font-bold">
+        **Negrito**
+      </span>
+      <span class="px-2.5 py-1 rounded-lg bg-zinc-800/70 border border-zinc-700/70 text-zinc-300">
+        * Lista
+      </span>
+    </div>
+
+    <!-- Card Principal do Editor -->
+    <main class="flex-1 flex flex-col bg-zinc-900/80 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
+      <!-- Barra Superior do Editor -->
+      <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+        <div class="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm">
+          <div class="flex items-center gap-1.5 text-zinc-300">
+            <span class="text-zinc-500">Palavras:</span>
+            <strong id="word-count" class="text-white font-semibold">0</strong>
+          </div>
+          <div class="h-4 w-px bg-zinc-800"></div>
+          <div class="flex items-center gap-1.5 text-zinc-300">
+            <span class="text-zinc-500">Tópicos:</span>
+            <strong id="topic-count" class="text-emerald-400 font-semibold">0</strong>
+          </div>
+          <div class="h-4 w-px bg-zinc-800 hidden sm:block"></div>
+          <div class="hidden sm:flex items-center gap-1.5 text-zinc-300">
+            <span class="text-zinc-500">Leitura corrida:</span>
+            <strong id="read-time" class="text-zinc-200 font-semibold">0m</strong>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            id="btn-restore-default"
+            type="button"
+            class="px-3 py-1.5 text-xs font-medium text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-lg transition"
+          >
+            Restaurar esboço padrão
+          </button>
+          <button
+            id="btn-clear"
+            type="button"
+            class="px-3 py-1.5 text-xs font-medium text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition"
+          >
+            Limpar
+          </button>
+        </div>
+      </div>
+
+      <!-- Área de Texto do Esboço -->
+      <textarea
+        id="script-input"
+        class="flex-1 w-full min-h-[300px] sm:min-h-[370px] p-4 sm:p-6 bg-transparent text-zinc-100 placeholder-zinc-500 text-sm sm:text-base leading-relaxed font-normal resize-none focus:outline-none"
+        placeholder="Digite ou cole seu esboço bíblico aqui..."
+        spellcheck="true"
+      ></textarea>
+
+      <!-- Rodapé do Editor: Tempo da Pregação + Iniciar -->
+      <div class="p-4 sm:p-5 bg-zinc-900 border-t border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+
+        <!-- Configuração do Tempo da Pregação -->
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <label for="duration-input" class="text-xs sm:text-sm text-zinc-300 font-medium">Tempo da pregação:</label>
+            <div class="flex items-center bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-1.5">
+              <input
+                id="duration-input"
+                type="number"
+                min="1"
+                max="180"
+                value="30"
+                class="w-12 bg-transparent text-center text-sm font-bold text-white focus:outline-none"
+              />
+              <span class="text-xs text-zinc-400 ml-1">min</span>
+            </div>
+          </div>
+
+          <!-- Atalhos rápidos de tempo (15, 30, 45 min) -->
+          <div class="flex items-center gap-1.5">
+            <button type="button" data-preset-min="15" class="preset-min-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 transition">
+              15m
+            </button>
+            <button type="button" data-preset-min="30" class="preset-min-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 transition">
+              30m
+            </button>
+            <button type="button" data-preset-min="45" class="preset-min-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 transition">
+              45m
+            </button>
+          </div>
+        </div>
+
+        <!-- Botão Principal -->
+        <button
+          id="btn-start-prompter"
+          type="button"
+          class="flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-zinc-950 font-bold text-base shadow-lg shadow-emerald-500/25 transition"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          Iniciar Teleprompter
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- ==================== MODO 2: TELEPROMPTER (LEITURA) ==================== -->
+  <div id="prompter-view" class="hidden fixed inset-0 z-40 bg-black flex flex-col overflow-hidden select-none">
+
+    <!-- Vídeo da Câmera em Segundo Plano -->
+    <video
+      id="camera-video"
+      autoplay
+      playsinline
+      muted
+      class="hidden absolute inset-0 w-full h-full object-cover camera-mirror z-0"
+    ></video>
+
+    <!-- Máscara Escura com Opacidade Ajustável sobre a Câmera -->
+    <div
+      id="camera-overlay"
+      class="hidden absolute inset-0 z-0 pointer-events-none transition-colors duration-150"
+      style="background-color: rgba(0, 0, 0, 0.7);"
+    ></div>
+
+    <!-- Cabeçalho Superior do Teleprompter (Voltar + Cronômetro + Ações + Atalhos de Tópicos) -->
+    <div id="top-hud" class="relative z-20 bg-gradient-to-b from-black/95 via-black/85 to-transparent pb-2 transition-opacity duration-300">
+      <!-- Linha 1 do Topo: Voltar | Cronômetro Regressivo | Ações -->
+      <div class="flex items-center justify-between gap-2 px-3 sm:px-5 pt-2.5 pb-2">
+        <!-- Botão Voltar ao Editor -->
+        <button
+          id="btn-back-editor"
+          type="button"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 text-xs sm:text-sm font-medium text-zinc-200 transition shrink-0"
+          title="Voltar ao Editor (Esc)"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          <span class="hidden sm:inline">Editor</span>
+        </button>
+
+        <!-- CRONÔMETRO REGRESSIVO DA PREGAÇÃO -->
+        <div
+          id="timer-box"
+          class="flex items-center gap-2 sm:gap-2.5 px-3 sm:px-4 py-1.5 rounded-2xl bg-zinc-900/90 border border-zinc-700/80 shadow-lg backdrop-blur-md"
+        >
+          <div class="flex items-center gap-1.5">
+            <span id="timer-status-dot" class="w-2 h-2 rounded-full bg-zinc-500"></span>
+            <span
+              id="timer-display"
+              class="font-mono text-lg sm:text-2xl font-extrabold tracking-tight text-emerald-400 tabular-nums"
+            >30:00</span>
+          </div>
+
+          <div class="h-5 w-px bg-zinc-700/80"></div>
+
+          <!-- Controle Independente do Cronômetro (Pausar/Continuar só o relógio) -->
+          <button
+            id="btn-timer-toggle"
+            type="button"
+            class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition"
+            title="Pausar/Retomar cronômetro de forma independente"
+            aria-label="Pausar ou retomar cronômetro"
+          >
+            <svg id="icon-timer-play" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <svg id="icon-timer-pause" class="w-3.5 h-3.5 hidden" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+            </svg>
+          </button>
+
+          <!-- Botão Zerar/Reiniciar Cronômetro -->
+          <button
+            id="btn-timer-reset"
+            type="button"
+            class="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+            title="Reiniciar cronômetro"
+            aria-label="Reiniciar cronômetro"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Ações Rápidas (Câmera, Espelho, Retrair Controles) -->
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <button
+            id="btn-toggle-camera"
+            type="button"
+            class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 text-xs sm:text-sm font-medium text-zinc-200 transition"
+            title="Ativar/Desativar Câmera ao Fundo"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span class="hidden md:inline">Câmera</span>
+          </button>
+
+          <button
+            id="btn-toggle-mirror"
+            type="button"
+            class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 text-xs sm:text-sm font-medium text-zinc-200 transition"
+            title="Modo Espelhado (para vidro)"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            <span class="hidden md:inline">Espelhar</span>
+          </button>
+
+          <button
+            id="btn-toggle-controls"
+            type="button"
+            class="p-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 transition"
+            title="Retrair/Expandir Barra de Controles"
+            aria-label="Retrair ou expandir barra de controles"
+          >
+            <svg id="icon-controls-hide" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+            <svg id="icon-controls-show" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Linha 2 do Topo: BARRA HORIZONTAL DE ATALHOS POR TÓPICO -->
+      <div
+        id="topic-nav-bar"
+        class="hidden px-3 sm:px-5 pb-1 overflow-x-auto no-scrollbar"
+      >
+        <div id="topic-nav-list" class="flex items-center gap-2 w-max mx-auto"></div>
+      </div>
+    </div>
+
+    <!-- Linha-Guia Sutil de Leitura (posicionada perto da câmera/lente) -->
+    <div class="pointer-events-none absolute left-0 right-0 top-[30%] z-10 flex items-center">
+      <div class="pl-1.5 sm:pl-3 text-emerald-400/85">
+        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </div>
+      <div class="flex-1 h-16 sm:h-20 border-y border-emerald-400/20 bg-emerald-400/[0.03]"></div>
+      <div class="pr-1.5 sm:pr-3 text-emerald-400/85">
+        <svg class="w-5 h-5 sm:w-6 sm:h-6 rotate-180" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Área de Rolagem do Texto (Toque na tela para Play/Pause) -->
+    <div
+      id="scroll-container"
+      class="relative z-10 flex-1 overflow-y-auto no-scrollbar cursor-pointer"
+    >
+      <!-- Espaçamento superior para iniciar na linha-guia -->
+      <div class="h-[22vh]"></div>
+
+      <!-- Conteúdo Formatado do Esboço -->
+      <div
+        id="prompter-text-wrapper"
+        class="mx-auto transition-[padding] duration-150 ease-out"
+        style="padding-left: 10%; padding-right: 10%;"
+      >
+        <div
+          id="prompter-text"
+          class="font-medium break-words drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]"
+          style="font-size: 48px;"
+        ></div>
+      </div>
+
+      <!-- Espaçamento inferior para permitir que o final suba até a linha-guia -->
+      <div class="h-[75vh]"></div>
+    </div>
+
+    <!-- Barra de Controles Inferior (Compacta / Retrátil) -->
+    <div
+      id="controls-bar"
+      class="relative z-20 bg-zinc-950/92 backdrop-blur-md border-t border-zinc-800/90 px-3 sm:px-6 py-3 transition-all duration-300"
+    >
+      <div class="max-w-5xl mx-auto flex flex-col gap-3">
+
+        <!-- Linha Principal de Controles -->
+        <div class="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <!-- Play/Pause e Reiniciar Rolagem -->
+          <div class="flex items-center gap-2">
+            <button
+              id="btn-play-pause"
+              type="button"
+              class="flex items-center justify-center gap-2 min-w-[116px] sm:min-w-[132px] px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-bold text-sm sm:text-base shadow-lg shadow-emerald-500/20 transition"
+            >
+              <svg id="icon-play" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              <svg id="icon-pause" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+              </svg>
+              <span id="play-pause-label">Iniciar</span>
+            </button>
+
+            <button
+              id="btn-restart"
+              type="button"
+              class="p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-200 transition flex items-center gap-1.5 text-sm font-medium"
+              title="Voltar ao topo (R)"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+              <span class="hidden sm:inline">Topo</span>
+            </button>
+          </div>
+
+          <!-- Atalhos de Teclado (Desktop) -->
+          <div class="hidden xl:flex items-center gap-3 text-[11px] text-zinc-400 bg-zinc-900/80 border border-zinc-800 px-3 py-1.5 rounded-full">
+            <span><kbd class="text-zinc-200 font-semibold">Espaço</kbd> Play/Pause</span>
+            <span><kbd class="text-zinc-200 font-semibold">↑ / ↓</kbd> Velocidade</span>
+            <span><kbd class="text-zinc-200 font-semibold">R</kbd> Topo</span>
+            <span><kbd class="text-zinc-200 font-semibold">Esc</kbd> Editor</span>
+          </div>
+
+          <!-- Controle Rápido de Velocidade (- / valor / +) e Botão Ajustes -->
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl px-1.5 py-1">
+              <button
+                id="btn-speed-down"
+                type="button"
+                class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:scale-95 flex items-center justify-center text-base font-bold text-zinc-100"
+                aria-label="Diminuir velocidade"
+              >−</button>
+              <div class="min-w-[54px] text-center">
+                <span class="block text-[9px] uppercase tracking-wider text-zinc-500">Veloc.</span>
+                <span id="speed-value-display" class="text-xs sm:text-sm font-bold text-emerald-400">25</span>
+              </div>
+              <button
+                id="btn-speed-up"
+                type="button"
+                class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:scale-95 flex items-center justify-center text-base font-bold text-zinc-100"
+                aria-label="Aumentar velocidade"
+              >+</button>
+            </div>
+
+            <button
+              id="btn-toggle-sliders"
+              type="button"
+              class="sm:hidden flex items-center gap-1 px-3 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              Ajustes
+            </button>
+          </div>
+        </div>
+
+        <!-- Linha 2: Sliders (Velocidade, Fonte, Margem Lateral, Opacidade da Câmera) -->
+        <div id="sliders-panel" class="hidden sm:grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 pt-2.5 border-t border-zinc-800/80">
+          <!-- Velocidade (1 a 100) -->
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-zinc-400">Velocidade</span>
+              <span id="speed-slider-label" class="text-zinc-200 font-semibold">25</span>
+            </div>
+            <input id="slider-speed" type="range" min="1" max="100" step="1" value="25" />
+          </div>
+
+          <!-- Tamanho da Fonte (24px a 80px) -->
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-zinc-400">Fonte</span>
+              <span id="font-slider-label" class="text-zinc-200 font-semibold">48px</span>
+            </div>
+            <input id="slider-font" type="range" min="24" max="80" step="2" value="48" />
+          </div>
+
+          <!-- Margem Lateral (0% a 30%) -->
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-zinc-400">Margem lateral</span>
+              <span id="margin-slider-label" class="text-zinc-200 font-semibold">10%</span>
+            </div>
+            <input id="slider-margin" type="range" min="0" max="30" step="1" value="10" />
+          </div>
+
+          <!-- Opacidade Escura sobre a Câmera (visível apenas quando câmera ativa) -->
+          <div id="camera-opacity-control" class="hidden flex-col gap-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-emerald-400">Escurecer câmera</span>
+              <span id="opacity-slider-label" class="text-zinc-200 font-semibold">70%</span>
+            </div>
+            <input id="slider-camera-opacity" type="range" min="20" max="95" step="5" value="70" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botão Flutuante quando a barra inferior está retraída -->
+    <button
+      id="btn-expand-controls"
+      type="button"
+      class="hidden fixed bottom-4 right-4 z-30 flex items-center gap-2 px-4 py-2.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold text-zinc-200 shadow-2xl backdrop-blur-md transition"
+    >
+      <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+      </svg>
+      Controles
+    </button>
+  </div>
+
+  <!-- ==================== LÓGICA JAVASCRIPT ==================== -->
+  <script>
+    (() => {
+      'use strict';
+
+      // -------------------- Constantes e Esboço Padrão --------------------
+      const STORAGE_KEYS = {
+        SCRIPT: 'teleprompter_pregacao_script_v2',
+        SETTINGS: 'teleprompter_pregacao_settings_v2',
+      };
+
+      const DEFAULT_SERMON_SCRIPT = `### INTRODUÇÃO (00:00 – 04:00)
+[OLHAR PARA A CÂMERA / CONGREGAÇÃO — RITMO CALMO]
+Você já parou para pensar na diferença entre **poder** e **autoridade**?
+Poder é a capacidade de fazer algo — é força. Um caminhão em alta velocidade tem poder.
+Autoridade é o **direito legal** de governar, decidir e representar alguém. Um guarda de trânsito, apenas levantando a mão, faz o caminhão parar. Ele não é mais forte que o caminhão, mas carrega a autoridade de quem o enviou.
+Hoje vamos percorrer a Bíblia, de Gênesis até Jesus, para entender **a autoridade que Deus deu ao ser humano, como ela foi perdida e como Cristo a restaurou em nós.**
+[PAUSA]
+
+### PONTO 1: A AUTORIDADE NO ÉDEN (04:00 – 11:00)
+Tudo começa no primeiro capítulo da Bíblia. Quando Deus cria o universo, Ele não cria o ser humano para ser um escravo, nem um espectador. Ele nos cria como **representantes** do Seu governo na terra.
+[LER VERSÍCULO — GÊNESIS 1:26-28]
+> "Também disse Deus: Façamos o homem à nossa imagem, conforme a nossa semelhança; tenha ele domínio sobre os peixes do mar, sobre as aves dos céus, sobre os animais domésticos, sobre toda a terra e sobre todos os répteis que rastejam pela terra. (...) E Deus os abençoou e lhes disse: Sede fecundos, multiplicai-vos, enchei a terra e sujeitai-a; dominai..."
+[DESENVOLVER — 3 MINUTOS]
+* **Imagem e Semelhança:** Reis antigos colocavam estátuas suas nos territórios conquistados para mostrar quem governava ali. Deus colocou o homem como Sua imagem viva na terra.
+* **Domínio com responsabilidade:** Dominar não é explorar ou destruir, mas **cuidar, cultivar e governar** segundo o caráter de Deus (Gênesis 2:15).
+* **O segredo da autoridade:** Adão tinha autoridade sobre a criação porque estava **debaixo da autoridade de Deus**.
+[LER VERSÍCULO — SALMO 8:5-6]
+> "Contudo, pouco menor o fizeste do que Deus e de glória e de honra o coroaste. Deste-lhe domínio sobre as obras da tua mão e sob seus pés tudo lhe puseste."
+
+### PONTO 2: A AUTORIDADE PERDIDA (11:00 – 17:00)
+Se Deus deu essa autoridade ao homem, por que o mundo está tão quebrado hoje? Por que existe tanta opressão, medo e caos?
+A resposta está em Gênesis 3. A serpente não atacou Adão e Eva com força física. Ela atacou a **obediência** deles.
+[PAUSA]
+* Quando o homem escolheu desobedecer a Deus, ele quebrou a linha de autoridade.
+* **Princípio espiritual:** Ninguém tem autoridade acima daquilo a que se submete. Ao dar ouvidos ao inimigo, o homem entregou a chave do governo da terra.
+[LER VERSÍCULO — LUCAS 4:5-6]
+> "E, elevando-o, mostrou-lhe, num momento, todos os reinos do mundo. Disse-lhe o diabo: Dar-te-ei toda esta autoridade e a glória destes reinos, porque ela me foi entregue, e a dou a quem eu quiser."
+[DESENVOLVER — 2 MINUTOS]
+* Repare na frase: *"ela me foi entregue"*. Jesus não rebate dizendo que era mentira — Adão realmente havia entregue essa autoridade.
+* Sem a autoridade original, o ser humano passou de **governador** a **escravo** do pecado e do medo.
+
+### PONTO 3: RECONQUISTADA EM JESUS (17:00 – 24:00)
+É aqui que entra o Evangelho. Jesus veio como o **Segundo Adão** (1 Coríntios 15:45) para vencer exatamente onde o primeiro falhou.
+* **No deserto:** Adão caiu em um jardim cheio de frutos; Jesus venceu em um deserto com fome, usando a Palavra de Deus.
+* **No ministério:** O mar se acalmava, doenças recuavam e demônios fugiam (Lucas 4:36).
+* **Na cruz:** O inimigo achou que tinha vencido, mas a cruz foi o lugar da retomada definitiva.
+[LER VERSÍCULO — COLOSSENSES 2:15]
+> "E, despojando os principados e as potestades, publicamente os expôs ao desprezo, triunfando deles na cruz."
+[LER VERSÍCULO — MATEUS 28:18]
+> "Jesus, aproximando-se, falou-lhes, dizendo: Toda a autoridade me foi dada no céu e na terra."
+[PAUSA — DEIXAR A FRASE ECOAR]
+Toda a autoridade. Não metade. Não apenas no céu. **No céu e na terra.** O que Adão perdeu, Cristo reconquistou por completo.
+
+### CONCLUSÃO E APLICAÇÃO (24:00 – 30:00)
+No versículo seguinte de Mateus 28, Jesus olha para os discípulos — e olha para nós hoje — e **delega** essa autoridade novamente à Igreja.
+[LER VERSÍCULO — MATEUS 28:19-20]
+> "Ide, portanto, fazei discípulos de todas as nações... E eis que estou convosco todos os dias até à consumação do século."
+[LER VERSÍCULO — LUCAS 10:19]
+> "Eis aí vos dei autoridade para pisardes serpentes e escorpiões e sobre todo o poder do inimigo, e nada, absolutamente, vos causará dano."
+[APLICAÇÃO PRÁTICA — 3 PONTOS RÁPIDOS]
+1. **Em submissão a Cristo:** Só temos autoridade espiritual quando estamos debaixo da autoridade de Jesus.
+2. **Na oração e na Palavra:** Não precisamos viver reféns do medo ou da culpa. Em nome de Jesus, temos acesso direto ao Pai.
+3. **No serviço e na missão:** A autoridade de Jesus nunca foi para humilhar pessoas, mas para **libertar, curar e anunciar o Reino**.
+[ENCERRAMENTO E ORAÇÃO — 2 MINUTOS]
+Você não foi criado para viver derrotado. O mesmo Deus que coroou o homem de glória em Gênesis é o Deus que, através de Jesus, devolveu a você identidade, propósito e autoridade.
+[CONVIDAR PARA ORAÇÃO FINAL]
+Vamos orar...`;
+
+      // -------------------- Estado da Aplicação --------------------
+      const state = {
+        mode: 'editor', // 'editor' | 'prompter'
+        isPlaying: false,
+        controlsCollapsed: false,
+        cameraActive: false,
+        cameraStream: null,
+        scrollPos: 0,
+        lastFrameTime: null,
+        rafId: null,
+        // Cronômetro regressivo
+        timerRemainingSec: 30 * 60,
+        timerRunning: false,
+        timerIndependent: false, // true se o usuário controlou o relógio manualmente
+        timerInterval: null,
+        // Tópicos para navegação rápida
+        topics: [],
+        activeTopicIndex: 0,
+        // Configurações salvas
+        settings: {
+          speed: 25,          // 1 a 100
+          fontSize: 48,       // 24 a 80
+          marginPct: 10,      // 0 a 30
+          mirrored: false,
+          durationMin: 30,    // minutos da pregação
+          cameraOpacity: 70,  // 20 a 95 (%)
+        },
+      };
+
+      // -------------------- Referências do DOM --------------------
+      const dom = {
+        toastContainer: document.getElementById('toast-container'),
+        // Editor
+        editorView: document.getElementById('editor-view'),
+        scriptInput: document.getElementById('script-input'),
+        wordCount: document.getElementById('word-count'),
+        topicCount: document.getElementById('topic-count'),
+        readTime: document.getElementById('read-time'),
+        saveDot: document.getElementById('save-dot'),
+        saveStatus: document.getElementById('save-status'),
+        btnRestoreDefault: document.getElementById('btn-restore-default'),
+        btnClear: document.getElementById('btn-clear'),
+        durationInput: document.getElementById('duration-input'),
+        presetMinBtns: document.querySelectorAll('.preset-min-btn'),
+        btnStartPrompter: document.getElementById('btn-start-prompter'),
+        // Prompter
+        prompterView: document.getElementById('prompter-view'),
+        cameraVideo: document.getElementById('camera-video'),
+        cameraOverlay: document.getElementById('camera-overlay'),
+        btnBackEditor: document.getElementById('btn-back-editor'),
+        btnToggleCamera: document.getElementById('btn-toggle-camera'),
+        btnToggleMirror: document.getElementById('btn-toggle-mirror'),
+        btnToggleControls: document.getElementById('btn-toggle-controls'),
+        iconControlsHide: document.getElementById('icon-controls-hide'),
+        iconControlsShow: document.getElementById('icon-controls-show'),
+        btnExpandControls: document.getElementById('btn-expand-controls'),
+        // Cronômetro
+        timerBox: document.getElementById('timer-box'),
+        timerStatusDot: document.getElementById('timer-status-dot'),
+        timerDisplay: document.getElementById('timer-display'),
+        btnTimerToggle: document.getElementById('btn-timer-toggle'),
+        iconTimerPlay: document.getElementById('icon-timer-play'),
+        iconTimerPause: document.getElementById('icon-timer-pause'),
+        btnTimerReset: document.getElementById('btn-timer-reset'),
+        // Barra de Tópicos
+        topicNavBar: document.getElementById('topic-nav-bar'),
+        topicNavList: document.getElementById('topic-nav-list'),
+        // Texto e Rolagem
+        scrollContainer: document.getElementById('scroll-container'),
+        prompterTextWrapper: document.getElementById('prompter-text-wrapper'),
+        prompterText: document.getElementById('prompter-text'),
+        // Controles Inferiores
+        controlsBar: document.getElementById('controls-bar'),
+        btnPlayPause: document.getElementById('btn-play-pause'),
+        iconPlay: document.getElementById('icon-play'),
+        iconPause: document.getElementById('icon-pause'),
+        playPauseLabel: document.getElementById('play-pause-label'),
+        btnRestart: document.getElementById('btn-restart'),
+        btnSpeedDown: document.getElementById('btn-speed-down'),
+        btnSpeedUp: document.getElementById('btn-speed-up'),
+        speedValueDisplay: document.getElementById('speed-value-display'),
+        btnToggleSliders: document.getElementById('btn-toggle-sliders'),
+        slidersPanel: document.getElementById('sliders-panel'),
+        sliderSpeed: document.getElementById('slider-speed'),
+        speedSliderLabel: document.getElementById('speed-slider-label'),
+        sliderFont: document.getElementById('slider-font'),
+        fontSliderLabel: document.getElementById('font-slider-label'),
+        sliderMargin: document.getElementById('slider-margin'),
+        marginSliderLabel: document.getElementById('margin-slider-label'),
+        cameraOpacityControl: document.getElementById('camera-opacity-control'),
+        sliderCameraOpacity: document.getElementById('slider-camera-opacity'),
+        opacitySliderLabel: document.getElementById('opacity-slider-label'),
+      };
+
+      // -------------------- Notificações (Toast) --------------------
+      function showToast(message, type = 'info') {
+        const styles = {
+          info: 'bg-zinc-900 border-zinc-700 text-zinc-100',
+          success: 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200',
+          error: 'bg-rose-950/95 border-rose-500/50 text-rose-200',
+        };
+        const toast = document.createElement('div');
+        toast.className = `pointer-events-auto px-4 py-3 rounded-xl border text-sm font-medium shadow-2xl backdrop-blur-md transition-all duration-300 opacity-0 -translate-y-2 ${styles[type] || styles.info}`;
+        toast.textContent = message;
+        dom.toastContainer.appendChild(toast);
+
+        requestAnimationFrame(() => {
+          toast.classList.remove('opacity-0', '-translate-y-2');
+        });
+
+        setTimeout(() => {
+          toast.classList.add('opacity-0', '-translate-y-2');
+          setTimeout(() => toast.remove(), 300);
+        }, 3200);
+      }
+
+      // -------------------- Persistência (localStorage) --------------------
+      function loadSavedData() {
+        try {
+          const savedScript = localStorage.getItem(STORAGE_KEYS.SCRIPT);
+          dom.scriptInput.value = savedScript !== null ? savedScript : DEFAULT_SERMON_SCRIPT;
+
+          const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+          if (savedSettings) {
+            state.settings = { ...state.settings, ...JSON.parse(savedSettings) };
+          }
+        } catch (err) {
+          dom.scriptInput.value = DEFAULT_SERMON_SCRIPT;
+        }
+        state.timerRemainingSec = state.settings.durationMin * 60;
+        applySettingsToUI();
+        updateEditorStats();
+      }
+
+      let saveTimeout = null;
+      function saveScript() {
+        dom.saveDot.classList.replace('bg-emerald-500', 'bg-amber-400');
+        dom.saveStatus.textContent = 'Salvando...';
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+          try {
+            localStorage.setItem(STORAGE_KEYS.SCRIPT, dom.scriptInput.value);
+            dom.saveDot.classList.replace('bg-amber-400', 'bg-emerald-500');
+            dom.saveStatus.textContent = 'Salvo automaticamente';
+          } catch (err) {
+            dom.saveStatus.textContent = 'Erro ao salvar';
+          }
+        }, 300);
+      }
+
+      function saveSettings() {
+        try {
+          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(state.settings));
+        } catch (err) {
+          // Ignora caso localStorage esteja indisponível
+        }
+      }
+
+      // -------------------- Editor: Estatísticas e Duração --------------------
+      function updateEditorStats() {
+        const raw = dom.scriptInput.value;
+        const trimmed = raw.trim();
+        const words = trimmed ? trimmed.split(/\s+/).filter(Boolean).length : 0;
+        dom.wordCount.textContent = words.toLocaleString('pt-BR');
+
+        // Conta tópicos iniciados com ### ou ##
+        const topicMatches = raw.match(/^#{2,3}\s+.+$/gm);
+        dom.topicCount.textContent = topicMatches ? topicMatches.length : 0;
+
+        // Tempo aproximado de leitura corrida (~125 palavras por minuto)
+        const mins = Math.max(0, Math.round(words / 125));
+        dom.readTime.textContent = words === 0 ? '0m' : (mins < 1 ? '< 1m' : `~${mins}m`);
+      }
+
+      function setPreachingDuration(minutes) {
+        const clamped = Math.min(180, Math.max(1, parseInt(minutes, 10) || 30));
+        state.settings.durationMin = clamped;
+        state.timerRemainingSec = clamped * 60;
+        dom.durationInput.value = clamped;
+        updatePresetButtons();
+        saveSettings();
+      }
+
+      function updatePresetButtons() {
+        dom.presetMinBtns.forEach((btn) => {
+          const val = parseInt(btn.dataset.presetMin, 10);
+          const isActive = val === state.settings.durationMin;
+          btn.className = isActive
+            ? 'preset-min-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 transition'
+            : 'preset-min-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/80 transition';
+        });
+      }
+
+      // -------------------- Sincronização das Configurações com a UI --------------------
+      function applySettingsToUI() {
+        const { speed, fontSize, marginPct, mirrored, durationMin, cameraOpacity } = state.settings;
+
+        // Duração no editor
+        dom.durationInput.value = durationMin;
+        updatePresetButtons();
+
+        // Velocidade (1 a 100)
+        dom.sliderSpeed.value = speed;
+        dom.speedValueDisplay.textContent = speed;
+        dom.speedSliderLabel.textContent = speed;
+
+        // Fonte (24px a 80px)
+        dom.sliderFont.value = fontSize;
+        dom.fontSliderLabel.textContent = `${fontSize}px`;
+        dom.prompterText.style.fontSize = `${fontSize}px`;
+
+        // Margem Lateral (0% a 30%)
+        dom.sliderMargin.value = marginPct;
+        dom.marginSliderLabel.textContent = `${marginPct}%`;
+        dom.prompterTextWrapper.style.paddingLeft = `${marginPct}%`;
+        dom.prompterTextWrapper.style.paddingRight = `${marginPct}%`;
+
+        // Opacidade da câmera
+        dom.sliderCameraOpacity.value = cameraOpacity;
+        dom.opacitySliderLabel.textContent = `${cameraOpacity}%`;
+        dom.cameraOverlay.style.backgroundColor = `rgba(0, 0, 0, ${cameraOpacity / 100})`;
+
+        // Modo Espelhado
+        dom.prompterText.classList.toggle('mirrored-text', mirrored);
+        dom.btnToggleMirror.classList.toggle('bg-emerald-500/20', mirrored);
+        dom.btnToggleMirror.classList.toggle('border-emerald-500/60', mirrored);
+        dom.btnToggleMirror.classList.toggle('text-emerald-300', mirrored);
+      }
+
+      function adjustSpeed(delta) {
+        const next = Math.min(100, Math.max(1, state.settings.speed + delta));
+        state.settings.speed = next;
+        applySettingsToUI();
+        saveSettings();
+      }
+
+      // -------------------- Parser de Formatação para Pregação --------------------
+      function escapeHtml(str) {
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function formatInlineText(escapedText) {
+        // 1. Avisos internos entre colchetes [EXEMPLO] -> badge azul ciano
+        let result = escapedText.replace(
+          /\[([^\]]+)\]/g,
+          '<span class="tp-cue-badge">$1</span>'
+        );
+        // 2. Negrito **texto** -> branco brilhante
+        result = result.replace(
+          /\*\*([^*]+)\*\*/g,
+          '<strong class="tp-bold">$1</strong>'
+        );
+        // 3. Itálico *texto* (sem interferir em negrito já convertido)
+        result = result.replace(
+          /\*([^*]+)\*/g,
+          '<em class="italic text-zinc-200">$1</em>'
+        );
+        return result;
+      }
+
+      function createShortTopicLabel(fullTitle) {
+        // Remove horários entre parênteses ex: "(00:00 – 04:00)" para deixar o botão compacto
+        let clean = fullTitle.replace(/\s*\([^)]*\)\s*/g, '').trim();
+        // Encurta se for muito longo
+        if (clean.length > 26) {
+          clean = clean.slice(0, 24).trim() + '…';
+        }
+        return clean || fullTitle;
+      }
+
+      function renderFormattedScript(rawText) {
+        const lines = rawText.split(/\r?\n/);
+        const htmlParts = [];
+        state.topics = [];
+
+        lines.forEach((rawLine) => {
+          const line = rawLine.trim();
+
+          if (!line) {
+            htmlParts.push('<div class="h-3"></div>');
+            return;
+          }
+
+          // Tópicos: ### ou ##
+          const topicMatch = line.match(/^#{2,3}\s+(.+)$/);
+          if (topicMatch) {
+            const topicIndex = state.topics.length;
+            const titleText = topicMatch[1].trim();
+            const topicId = `tp-topic-${topicIndex}`;
+            state.topics.push({
+              id: topicId,
+              title: titleText,
+              shortLabel: createShortTopicLabel(titleText),
+            });
+            htmlParts.push(
+              `<h2 id="${topicId}" data-topic-index="${topicIndex}" class="tp-topic">${formatInlineText(escapeHtml(titleText))}</h2>`
+            );
+            return;
+          }
+
+          // Versículos bíblicos: > Texto
+          const verseMatch = line.match(/^>\s*(.+)$/);
+          if (verseMatch) {
+            htmlParts.push(
+              `<blockquote class="tp-verse">${formatInlineText(escapeHtml(verseMatch[1]))}</blockquote>`
+            );
+            return;
+          }
+
+          // Linha inteira de aviso interno: [EXEMPLO]
+          if (/^\[[^\]]+\]$/.test(line)) {
+            htmlParts.push(
+              `<div class="tp-cue-line">${formatInlineText(escapeHtml(line))}</div>`
+            );
+            return;
+          }
+
+          // Lista com marcador: * item ou - item
+          const bulletMatch = line.match(/^[\*\-]\s+(.+)$/);
+          if (bulletMatch) {
+            htmlParts.push(
+              `<div class="tp-list-item"><span class="tp-list-bullet">•</span><span>${formatInlineText(escapeHtml(bulletMatch[1]))}</span></div>`
+            );
+            return;
+          }
+
+          // Lista numerada: 1. item
+          const numMatch = line.match(/^(\d+\.)\s+(.+)$/);
+          if (numMatch) {
+            htmlParts.push(
+              `<div class="tp-list-item"><span class="tp-list-bullet">${escapeHtml(numMatch[1])}</span><span>${formatInlineText(escapeHtml(numMatch[2]))}</span></div>`
+            );
+            return;
+          }
+
+          // Parágrafo comum
+          htmlParts.push(
+            `<p class="tp-paragraph">${formatInlineText(escapeHtml(line))}</p>`
+          );
+        });
+
+        dom.prompterText.innerHTML = htmlParts.join('');
+        renderTopicNavBar();
+      }
+
+      // -------------------- Barra de Atalhos por Tópico --------------------
+      function renderTopicNavBar() {
+        dom.topicNavList.innerHTML = '';
+        if (state.topics.length === 0) {
+          dom.topicNavBar.classList.add('hidden');
+          return;
+        }
+
+        dom.topicNavBar.classList.remove('hidden');
+        state.topics.forEach((topic, index) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.dataset.topicIndex = index;
+          btn.textContent = topic.shortLabel;
+          btn.title = topic.title;
+          btn.className = 'topic-nav-btn px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition';
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            jumpToTopic(index);
+          });
+          dom.topicNavList.appendChild(btn);
+        });
+
+        highlightActiveTopicButton(0);
+      }
+
+      function jumpToTopic(index) {
+        const topic = state.topics[index];
+        if (!topic) return;
+        const el = document.getElementById(topic.id);
+        if (!el) return;
+
+        // Alinha o tópico escolhido com a linha-guia (~26% do topo do container)
+        const containerRect = dom.scrollContainer.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const offsetInContainer = elRect.top - containerRect.top + dom.scrollContainer.scrollTop;
+        const targetScroll = Math.max(0, offsetInContainer - dom.scrollContainer.clientHeight * 0.22);
+
+        state.scrollPos = targetScroll;
+        dom.scrollContainer.scrollTo({ top: targetScroll, behavior: 'smooth' });
+        highlightActiveTopicButton(index);
+      }
+
+      function highlightActiveTopicButton(activeIdx) {
+        state.activeTopicIndex = activeIdx;
+        const buttons = dom.topicNavList.querySelectorAll('.topic-nav-btn');
+        buttons.forEach((btn, idx) => {
+          if (idx === activeIdx) {
+            btn.className = 'topic-nav-btn px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border bg-emerald-500 text-zinc-950 border-emerald-400 shadow-md shadow-emerald-500/20 transition';
+            btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          } else {
+            btn.className = 'topic-nav-btn px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 border-zinc-700/80 transition';
+          }
+        });
+      }
+
+      function updateActiveTopicFromScroll() {
+        if (state.topics.length === 0) return;
+        const containerTop = dom.scrollContainer.getBoundingClientRect().top;
+        const guideLineY = containerTop + dom.scrollContainer.clientHeight * 0.34;
+
+        let currentIdx = 0;
+        for (let i = 0; i < state.topics.length; i++) {
+          const el = document.getElementById(state.topics[i].id);
+          if (!el) continue;
+          if (el.getBoundingClientRect().top <= guideLineY) {
+            currentIdx = i;
+          } else {
+            break;
+          }
+        }
+
+        if (currentIdx !== state.activeTopicIndex) {
+          highlightActiveTopicButton(currentIdx);
+        }
+      }
+
+      // -------------------- Cronômetro Regressivo da Pregação --------------------
+      function formatTimer(seconds) {
+        const isNegative = seconds < 0;
+        const abs = Math.abs(seconds);
+        const mins = Math.floor(abs / 60);
+        const secs = abs % 60;
+        const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        return isNegative ? `-${formatted}` : formatted;
+      }
+
+      function updateTimerUI() {
+        const sec = state.timerRemainingSec;
+        dom.timerDisplay.textContent = formatTimer(sec);
+
+        // Remove classes de cor anteriores
+        dom.timerDisplay.classList.remove(
+          'text-emerald-400',
+          'text-amber-400',
+          'text-rose-500',
+          'timer-alert-pulse'
+        );
+        dom.timerBox.classList.remove(
+          'border-zinc-700/80',
+          'border-amber-500/50',
+          'border-rose-500/70'
+        );
+
+        // Cores dinâmicas conforme o tempo restante
+        if (sec < 60) {
+          // Menos de 1 minuto ou tempo excedido (negativo)
+          dom.timerDisplay.classList.add('text-rose-500', 'timer-alert-pulse');
+          dom.timerBox.classList.add('border-rose-500/70');
+        } else if (sec < 300) {
+          // Menos de 5 minutos
+          dom.timerDisplay.classList.add('text-amber-400');
+          dom.timerBox.classList.add('border-amber-500/50');
+        } else {
+          // Tempo normal
+          dom.timerDisplay.classList.add('text-emerald-400');
+          dom.timerBox.classList.add('border-zinc-700/80');
+        }
+
+        // Ícones de Play/Pause do cronômetro e indicador luminoso
+        if (state.timerRunning) {
+          dom.iconTimerPlay.classList.add('hidden');
+          dom.iconTimerPause.classList.remove('hidden');
+          dom.timerStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        } else {
+          dom.iconTimerPlay.classList.remove('hidden');
+          dom.iconTimerPause.classList.add('hidden');
+          dom.timerStatusDot.className = 'w-2 h-2 rounded-full bg-zinc-500';
+        }
+      }
+
+      function startTimer() {
+        if (state.timerRunning) return;
+        state.timerRunning = true;
+        updateTimerUI();
+        state.timerInterval = setInterval(() => {
+          state.timerRemainingSec -= 1;
+          updateTimerUI();
+        }, 1000);
+      }
+
+      function pauseTimer() {
+        state.timerRunning = false;
+        if (state.timerInterval) {
+          clearInterval(state.timerInterval);
+          state.timerInterval = null;
+        }
+        updateTimerUI();
+      }
+
+      function resetTimer() {
+        pauseTimer();
+        state.timerIndependent = false;
+        state.timerRemainingSec = state.settings.durationMin * 60;
+        updateTimerUI();
+      }
+
+      // -------------------- Alternância Editor <-> Teleprompter --------------------
+      function enterPrompterMode() {
+        const script = dom.scriptInput.value.trim();
+        if (!script) {
+          showToast('Digite ou cole seu esboço antes de iniciar.', 'error');
+          dom.scriptInput.focus();
+          return;
+        }
+
+        state.mode = 'prompter';
+        renderFormattedScript(dom.scriptInput.value);
+        dom.editorView.classList.add('hidden');
+        dom.prompterView.classList.remove('hidden');
+
+        // Prepara rolagem e cronômetro
+        resetScroll();
+        resetTimer();
+        setControlsCollapsed(false);
+        applySettingsToUI();
+      }
+
+      function exitPrompterMode() {
+        stopScrolling(false);
+        pauseTimer();
+        stopCamera();
+        state.mode = 'editor';
+        dom.prompterView.classList.add('hidden');
+        dom.editorView.classList.remove('hidden');
+      }
+
+      // -------------------- Rolagem Suave (requestAnimationFrame) --------------------
+      function updatePlayPauseUI() {
+        if (state.isPlaying) {
+          dom.iconPlay.classList.add('hidden');
+          dom.iconPause.classList.remove('hidden');
+          dom.playPauseLabel.textContent = 'Pausar';
+          dom.btnPlayPause.classList.replace('bg-emerald-500', 'bg-amber-400');
+          dom.btnPlayPause.classList.replace('hover:bg-emerald-400', 'hover:bg-amber-300');
+        } else {
+          dom.iconPlay.classList.remove('hidden');
+          dom.iconPause.classList.add('hidden');
+          dom.playPauseLabel.textContent = state.scrollPos > 5 ? 'Continuar' : 'Iniciar';
+          dom.btnPlayPause.classList.replace('bg-amber-400', 'bg-emerald-500');
+          dom.btnPlayPause.classList.replace('hover:bg-amber-300', 'hover:bg-emerald-400');
+        }
+      }
+
+      function scrollLoop(timestamp) {
+        if (!state.isPlaying) return;
+
+        if (state.lastFrameTime === null) {
+          state.lastFrameTime = timestamp;
+        }
+
+        const dt = Math.min((timestamp - state.lastFrameTime) / 1000, 0.1);
+        state.lastFrameTime = timestamp;
+
+        // Converte velocidade (1 a 100) em pixels/segundo (aprox. 8 px/s até 280 px/s)
+        const pxPerSec = 6 + state.settings.speed * 2.6;
+        const maxScroll = dom.scrollContainer.scrollHeight - dom.scrollContainer.clientHeight;
+        state.scrollPos += pxPerSec * dt;
+
+        if (state.scrollPos >= maxScroll) {
+          state.scrollPos = maxScroll;
+          dom.scrollContainer.scrollTop = state.scrollPos;
+          stopScrolling(true);
+          showToast('Fim do esboço alcançado.', 'success');
+          return;
+        }
+
+        dom.scrollContainer.scrollTop = state.scrollPos;
+        updateActiveTopicFromScroll();
+        state.rafId = requestAnimationFrame(scrollLoop);
+      }
+
+      function startScrolling() {
+        const maxScroll = dom.scrollContainer.scrollHeight - dom.scrollContainer.clientHeight;
+        if (dom.scrollContainer.scrollTop >= maxScroll - 2) {
+          resetScroll();
+        }
+        state.scrollPos = dom.scrollContainer.scrollTop;
+        state.isPlaying = true;
+        state.lastFrameTime = null;
+        updatePlayPauseUI();
+
+        // Inicia o cronômetro junto com o teleprompter (a menos que tenha sido pausado manualmente)
+        if (!state.timerIndependent) {
+          startTimer();
+        }
+
+        state.rafId = requestAnimationFrame(scrollLoop);
+      }
+
+      function stopScrolling(syncTimer = true) {
+        state.isPlaying = false;
+        state.lastFrameTime = null;
+        if (state.rafId) {
+          cancelAnimationFrame(state.rafId);
+          state.rafId = null;
+        }
+        updatePlayPauseUI();
+
+        // Pausa o cronômetro junto, exceto se o pregador colocou o relógio em modo independente
+        if (syncTimer && !state.timerIndependent) {
+          pauseTimer();
+        }
+      }
+
+      function resetScroll() {
+        stopScrolling(false);
+        state.scrollPos = 0;
+        dom.scrollContainer.scrollTop = 0;
+        updatePlayPauseUI();
+        if (state.topics.length > 0) {
+          highlightActiveTopicButton(0);
+        }
+      }
+
+      function togglePlayPause() {
+        if (state.isPlaying) {
+          stopScrolling(true);
+        } else {
+          startScrolling();
+        }
+      }
+
+      // -------------------- Retrair / Expandir Controles Inferiores --------------------
+      function setControlsCollapsed(collapsed) {
+        state.controlsCollapsed = collapsed;
+        dom.controlsBar.classList.toggle('hidden', collapsed);
+        dom.btnExpandControls.classList.toggle('hidden', !collapsed);
+        dom.iconControlsHide.classList.toggle('hidden', collapsed);
+        dom.iconControlsShow.classList.toggle('hidden', !collapsed);
+      }
+
+      // -------------------- Câmera ao Fundo --------------------
+      async function toggleCamera() {
+        if (state.cameraActive) {
+          stopCamera();
+          return;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showToast('Câmera indisponível neste ambiente (requer HTTPS ou localhost).', 'error');
+          return;
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false,
+          });
+          state.cameraStream = stream;
+          state.cameraActive = true;
+          dom.cameraVideo.srcObject = stream;
+          dom.cameraVideo.classList.remove('hidden');
+          dom.cameraOverlay.classList.remove('hidden');
+          dom.cameraOpacityControl.classList.remove('hidden');
+          dom.cameraOpacityControl.classList.add('flex');
+
+          dom.btnToggleCamera.classList.add('bg-emerald-500/20', 'border-emerald-500/60', 'text-emerald-300');
+          showToast('Câmera ativada ao fundo.', 'success');
+        } catch (err) {
+          let msg = 'Não foi possível acessar a câmera.';
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            msg = 'Permissão de câmera negada pelo navegador.';
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            msg = 'Nenhuma câmera encontrada neste dispositivo.';
+          }
+          showToast(msg, 'error');
+        }
+      }
+
+      function stopCamera() {
+        if (state.cameraStream) {
+          state.cameraStream.getTracks().forEach((track) => track.stop());
+          state.cameraStream = null;
+        }
+        state.cameraActive = false;
+        dom.cameraVideo.srcObject = null;
+        dom.cameraVideo.classList.add('hidden');
+        dom.cameraOverlay.classList.add('hidden');
+        dom.cameraOpacityControl.classList.add('hidden');
+        dom.cameraOpacityControl.classList.remove('flex');
+        dom.btnToggleCamera.classList.remove('bg-emerald-500/20', 'border-emerald-500/60', 'text-emerald-300');
+      }
+
+      // -------------------- Eventos do Editor --------------------
+      dom.scriptInput.addEventListener('input', () => {
+        updateEditorStats();
+        saveScript();
+      });
+
+      dom.btnRestoreDefault.addEventListener('click', () => {
+        dom.scriptInput.value = DEFAULT_SERMON_SCRIPT;
+        updateEditorStats();
+        saveScript();
+        showToast('Esboço padrão restaurado.', 'success');
+      });
+
+      dom.btnClear.addEventListener('click', () => {
+        dom.scriptInput.value = '';
+        updateEditorStats();
+        saveScript();
+        dom.scriptInput.focus();
+        showToast('Editor limpo.', 'info');
+      });
+
+      dom.durationInput.addEventListener('change', (e) => {
+        setPreachingDuration(e.target.value);
+      });
+
+      dom.presetMinBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          setPreachingDuration(btn.dataset.presetMin);
+        });
+      });
+
+      dom.btnStartPrompter.addEventListener('click', enterPrompterMode);
+
+      // -------------------- Eventos do Teleprompter --------------------
+      dom.btnBackEditor.addEventListener('click', exitPrompterMode);
+      dom.btnPlayPause.addEventListener('click', togglePlayPause);
+      dom.btnRestart.addEventListener('click', resetScroll);
+      dom.btnToggleCamera.addEventListener('click', toggleCamera);
+
+      dom.btnToggleMirror.addEventListener('click', () => {
+        state.settings.mirrored = !state.settings.mirrored;
+        applySettingsToUI();
+        saveSettings();
+      });
+
+      dom.btnToggleControls.addEventListener('click', () => {
+        setControlsCollapsed(!state.controlsCollapsed);
+      });
+      dom.btnExpandControls.addEventListener('click', () => {
+        setControlsCollapsed(false);
+      });
+
+      // Controle independente do cronômetro
+      dom.btnTimerToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.timerIndependent = true;
+        if (state.timerRunning) {
+          pauseTimer();
+          showToast('Cronômetro pausado (modo independente).', 'info');
+        } else {
+          startTimer();
+          showToast('Cronômetro rodando independentemente do texto.', 'info');
+        }
+      });
+
+      dom.btnTimerReset.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resetTimer();
+        showToast(`Cronômetro reiniciado para ${state.settings.durationMin}:00.`, 'info');
+      });
+
+      dom.btnToggleSliders.addEventListener('click', () => {
+        dom.slidersPanel.classList.toggle('hidden');
+        dom.slidersPanel.classList.toggle('grid');
+      });
+
+      dom.btnSpeedDown.addEventListener('click', () => adjustSpeed(-5));
+      dom.btnSpeedUp.addEventListener('click', () => adjustSpeed(5));
+
+      dom.sliderSpeed.addEventListener('input', (e) => {
+        state.settings.speed = parseInt(e.target.value, 10);
+        applySettingsToUI();
+        saveSettings();
+      });
+
+      dom.sliderFont.addEventListener('input', (e) => {
+        state.settings.fontSize = parseInt(e.target.value, 10);
+        applySettingsToUI();
+        saveSettings();
+      });
+
+      dom.sliderMargin.addEventListener('input', (e) => {
+        state.settings.marginPct = parseInt(e.target.value, 10);
+        applySettingsToUI();
+        saveSettings();
+      });
+
+      dom.sliderCameraOpacity.addEventListener('input', (e) => {
+        state.settings.cameraOpacity = parseInt(e.target.value, 10);
+        applySettingsToUI();
+        saveSettings();
+      });
+
+      // Sincroniza rolagem manual e destaque do tópico atual
+      dom.scrollContainer.addEventListener('scroll', () => {
+        if (Math.abs(dom.scrollContainer.scrollTop - state.scrollPos) > 2) {
+          state.scrollPos = dom.scrollContainer.scrollTop;
+        }
+        updateActiveTopicFromScroll();
+      }, { passive: true });
+
+      // Toque ou clique rápido na tela para Play/Pause (ignora arrasto de rolagem)
+      let pointerDownY = 0;
+      let pointerDownTime = 0;
+
+      dom.scrollContainer.addEventListener('pointerdown', (e) => {
+        pointerDownY = e.clientY;
+        pointerDownTime = Date.now();
+      });
+
+      dom.scrollContainer.addEventListener('pointerup', (e) => {
+        const moved = Math.abs(e.clientY - pointerDownY);
+        const duration = Date.now() - pointerDownTime;
+        if (moved < 10 && duration < 350) {
+          togglePlayPause();
+        }
+      });
+
+      // -------------------- Atalhos de Teclado (Computador) --------------------
+      document.addEventListener('keydown', (e) => {
+        if (state.mode !== 'prompter') return;
+
+        const isRangeInput = document.activeElement && document.activeElement.type === 'range';
+
+        if (e.code === 'Space') {
+          e.preventDefault();
+          togglePlayPause();
+        } else if (e.code === 'Escape') {
+          e.preventDefault();
+          exitPrompterMode();
+        } else if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          resetScroll();
+        } else if (e.code === 'ArrowUp' && !isRangeInput) {
+          e.preventDefault();
+          adjustSpeed(5);
+        } else if (e.code === 'ArrowDown' && !isRangeInput) {
+          e.preventDefault();
+          adjustSpeed(-5);
+        }
+      });
+
+      // -------------------- Inicialização --------------------
+      loadSavedData();
+    })();
+  </script>
+</body>
+</html>
